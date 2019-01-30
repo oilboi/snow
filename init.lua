@@ -1,5 +1,5 @@
 is_snowing = false
-is_raining = true
+is_raining = false
 local changeupdate = 1  --checks if player position changed every x seconds
 
 -----------------------------------------------------------------------------------------
@@ -163,9 +163,9 @@ minetest.register_globalstep(function(dtime)
 					--print("checking "..player:get_player_name())
 					changetimer = 0
 					--only snow if snowing
-					if is_snowing == true then
-					--	print("IT IS SNOWING")
 						--get required info
+						--snow or rain
+					if is_snowing == true or is_raining == true then
 						local playerpos = player:getpos()
 						local exactplayerpos = {x=math.floor(playerpos.x+0.5),y=math.floor(playerpos.y+0.5),z=math.floor(playerpos.z+0.5)}
 						local tablepos = snow.playertable[player:get_player_name()]
@@ -173,20 +173,19 @@ minetest.register_globalstep(function(dtime)
 						if tablepos.x ~= exactplayerpos.x or tablepos.y ~= exactplayerpos.y or tablepos.z ~= exactplayerpos.z then
 						--	print(player:get_player_name().."'s position has changed! updating!")
 							snow.playertable[player:get_player_name()] = exactplayerpos
-							snow.make_snow_around_player(exactplayerpos)
+							snow.make_snow_around_player(exactplayerpos,false)
 						end
-					elseif is_raining == true then
-							--print("IT IS RAINING")
-							--get required info
-							local playerpos = player:getpos()
-							local exactplayerpos = {x=math.floor(playerpos.x+0.5),y=math.floor(playerpos.y+0.5),z=math.floor(playerpos.z+0.5)}
-							local tablepos = snow.playertable[player:get_player_name()]
-							--do some maths and check if new position, if so, update
-							if tablepos.x ~= exactplayerpos.x or tablepos.y ~= exactplayerpos.y or tablepos.z ~= exactplayerpos.z then
-							--	print(player:get_player_name().."'s position has changed! updating!")
-								snow.playertable[player:get_player_name()] = exactplayerpos
-								snow.make_snow_around_player(exactplayerpos)
-							end
+					--clear up snow
+					else
+						local playerpos = player:getpos()
+						local exactplayerpos = {x=math.floor(playerpos.x+0.5),y=math.floor(playerpos.y+0.5),z=math.floor(playerpos.z+0.5)}
+						local tablepos = snow.playertable[player:get_player_name()]
+						--do some maths and check if new position, if so, update
+						if tablepos.x ~= exactplayerpos.x or tablepos.y ~= exactplayerpos.y or tablepos.z ~= exactplayerpos.z then
+						--	print(player:get_player_name().."'s position has changed! updating!")
+							snow.playertable[player:get_player_name()] = exactplayerpos
+							snow.make_snow_around_player(exactplayerpos,true)
+						end
 					end
 			end
 		end
@@ -194,7 +193,7 @@ minetest.register_globalstep(function(dtime)
 end)
 
 --this checks and makes snow fall
-snow.make_snow_around_player = function(pos)
+snow.make_snow_around_player = function(pos,clearup)
 		local range = 50
 		local air = minetest.get_content_id("air")
 		local snow = minetest.get_content_id("snow:snowfall")
@@ -230,11 +229,16 @@ snow.make_snow_around_player = function(pos)
 				local l = lightdata[p_pos]
 
 				--if n.name ~= "air" then
-				if n == "air" and l >= 15 then
-					data[p_pos] = percip
-				elseif n == "snow:snowfall" and l < 15 then
-					data[p_pos] = air
+				if clearup == false then
+					if n == "air" and l >= 15 then
+						data[p_pos] = percip
+					elseif (n == "snow:snowfall" and l < 15) or (n == "snow:rainfall" and l < 15)  then
+						data[p_pos] = air
+					end
+				elseif n == "snow:snowfall" or n == "snow:rainfall"  then
+						data[p_pos] = air
 				end
+
 			end
 		end
 		end
@@ -244,3 +248,32 @@ snow.make_snow_around_player = function(pos)
 		vm:write_to_map()
 		vm:update_map()
 end
+
+--commands
+minetest.register_chatcommand("rain", {
+	params = "<text>",
+	description = "make it rain",
+	privs = {server = true},
+	func = function( _ , text)
+		is_raining = true
+		is_snowing = false
+	end,
+})
+minetest.register_chatcommand("snow", {
+	params = "<text>",
+	description = "make it rain",
+	privs = {server = true},
+	func = function( _ , text)
+		is_raining = false
+		is_snowing = true
+	end,
+})
+minetest.register_chatcommand("clear", {
+	params = "<text>",
+	description = "make it rain",
+	privs = {server = true},
+	func = function( _ , text)
+		is_raining = false
+		is_snowing = false
+	end,
+})
