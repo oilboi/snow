@@ -1,5 +1,5 @@
-is_snowing = true
-is_raining = false
+is_snowing = false
+is_raining = true
 local changeupdate = 1  --checks if player position changed every x seconds
 
 -----------------------------------------------------------------------------------------
@@ -38,21 +38,19 @@ minetest.register_node("snow:snowfall", {
 	groups = {snow=1},
 })
 --remove snow
---[[
+
 minetest.register_abm{
 	label="removesnow",
 	nodenames = {"snow:snowfall"},
 	interval = 1,
-	chance = 1,
+	chance = 50,
 	action=function(pos)
-		--print("removing")
 		if is_snowing == false then
-			--print("removing")
 			minetest.remove_node(pos)
 		end
 	end,
 }
-]]--
+
 --make snow form
 minetest.register_abm{
   label = "snowfall",
@@ -85,9 +83,9 @@ minetest.register_node("snow:rainfall", {
 
 			animation = {
 				type = "vertical_frames",
-				aspect_w = 64,
-				aspect_h = 64,
-				length = 3,
+				aspect_w = 256,
+				aspect_h = 256,
+				length = 1,
 			},
 		},
 },
@@ -112,7 +110,7 @@ minetest.register_abm{
 	label="removerain",
 	nodenames = {"snow:rainfall"},
 	interval = 1,
-	chance = 1,
+	chance = 50,
 	action=function(pos)
 		--print("removing")
 		if is_raining == false then
@@ -125,14 +123,18 @@ minetest.register_abm{
 minetest.register_abm{
         label = "rainfall",
 	nodenames = {"snow:rainfall"},
-	interval = 3,
-	chance = 100,
+	interval = 1,
+	chance = 50,
 	action = function(pos)
-			pos.y = pos.y - 1
-			local node = minetest.get_node(pos).name
-			if node ~= "air" and node ~= "snow:rainfall" and minetest.get_item_group(node, "liquid") ~= 0 and node ~= "default:snow" then
+		pos.y = pos.y - 1
+		local node = minetest.get_node(pos).name
+		--water on top of node
+		if node ~= "air" and node ~= "snow:rainfall" and minetest.get_item_group(node, "liquid") == 0 and node ~= "default:snow" and minetest.registered_nodes[node]["buildable_to"] == false then
 				pos.y = pos.y + 1
-				minetest.set_node(pos,{name="default:water_flowing", param2 = 10})
+				minetest.set_node(pos,{name="default:water_flowing",param2=3})
+			--replace node if buildable to
+		elseif node ~= "air" and node ~= "snow:rainfall" and minetest.get_item_group(node, "liquid") == 0 and minetest.registered_nodes[node]["buildable_to"] == true then
+				minetest.set_node(pos,{name="default:water_flowing",param2=3})
 			end
 	end,
 }
