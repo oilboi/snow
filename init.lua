@@ -37,9 +37,9 @@ minetest.register_node("snow:snowfall", {
 	},
 	groups = {snow=1},
 })
---make snow form
+--remove snow
+--[[
 minetest.register_abm{
-
 	label="removesnow",
 	nodenames = {"snow:snowfall"},
 	interval = 1,
@@ -52,17 +52,22 @@ minetest.register_abm{
 		end
 	end,
 }
-
+]]--
+--make snow form
 minetest.register_abm{
-        label = "snowfall",
+  label = "snowfall",
 	nodenames = {"snow:snowfall"},
-	interval = 3,
-	chance = 100,
+	interval = 1,
+	chance = 300, --300 seems to be good
 	action = function(pos)
 			pos.y = pos.y - 1
 			local node = minetest.get_node(pos).name
-			if node ~= "air" and node ~= "snow:snowfall" and minetest.get_item_group(node, "liquid") ~= 0 and node ~= "default:snow" then
+			--snow on top of node
+			if node ~= "air" and node ~= "snow:snowfall" and minetest.get_item_group(node, "liquid") == 0 and node ~= "default:snow" and minetest.registered_nodes[node]["buildable_to"] == false then
 				pos.y = pos.y + 1
+				minetest.set_node(pos,{name="default:snow"})
+			--replace node if buildable to
+		elseif node ~= "air" and node ~= "snow:snowfall" and minetest.get_item_group(node, "liquid") == 0 and node ~= "default:snow" and minetest.registered_nodes[node]["buildable_to"] == true then
 				minetest.set_node(pos,{name="default:snow"})
 			end
 	end,
