@@ -194,7 +194,7 @@ end)
 
 --this checks and makes snow fall
 snow.make_snow_around_player = function(pos,clearup)
-		local range = 50
+		local range = 30
 		local air = minetest.get_content_id("air")
 		local snow = minetest.get_content_id("snow:snowfall")
 		local rain = minetest.get_content_id("snow:rainfall")
