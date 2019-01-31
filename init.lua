@@ -178,7 +178,6 @@ snow.make_snow_around_player = function(pos)
 		local rain = minetest.get_content_id("snow:rainfall")
 		local water = minetest.get_content_id("default:water_source")
 
-
 		local min = {x=pos.x-range,y=pos.y-range,z=pos.z-range}
 		local max = {x=pos.x+range,y=pos.y+range,z=pos.z+range}
 		local vm = minetest.get_voxel_manip()
@@ -205,7 +204,13 @@ snow.make_snow_around_player = function(pos)
 				local l = lightdata[p_pos]
 				--sets the data
 				if n == "air" and l >= 15 then
-					data[p_pos] = percip
+					local lightleveltest = minetest.get_node_light({x=pos.x+x,y=pos.y+y,z=pos.z+z}, 0.5)
+					--print(lightleveltest)
+					if lightleveltest and lightleveltest >= 15 then
+						data[p_pos] = percip
+					else
+						data[p_pos] = air
+					end
 				elseif (n == "snow:snowfall" and l < 15) or (n == "snow:rainfall" and l < 15)  then
 					data[p_pos] = air --this makes the snow adapt to the environment
 				end
@@ -232,7 +237,6 @@ snow.clear_old_snow = function(pos)
 		local emin, emax = vm:read_from_map(min,max)
 		local area = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
 		local data = vm:get_data()
-		local lightdata = vm:get_light_data()
 		local content_id = minetest.get_name_from_content_id
 
 		for x=-range, range do
@@ -241,7 +245,6 @@ snow.clear_old_snow = function(pos)
 			if vector.distance(pos, vector.add(pos, {x=x, y=y, z=z})) <= range then
 				local p_pos = area:index(pos.x+x,pos.y+y,pos.z+z)
 				local n = content_id(data[p_pos])
-				local l = lightdata[p_pos]
 				--sets the data
 				if n == "snow:snowfall" or n == "snow:rainfall" then
 					data[p_pos] = air --this clears old snow
