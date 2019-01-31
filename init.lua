@@ -7,6 +7,7 @@ is_snowing = false
 is_raining = false
 local changeupdate = 0.25  --checks if player position changed every x seconds
 local snowrange = 20 --the visual of the snow and deposit spawn radius
+local deposit_chance = 0.9 --uses math.random(deposit_chance) to deposit snow on each loop
 
 
 
@@ -241,29 +242,32 @@ snow.make_snow_fall = function(pos)
 	for y=-range, range do
 	for z=-range, range do
 		if vector.distance(pos, vector.add(pos, {x=x, y=y, z=z})) <= range then
-			--the actual node being indexed
-			local p_pos = area:index(pos.x+x,pos.y+y,pos.z+z)
-			local n = content_id(data[p_pos])
-			--the node above it (testing for place for snow and water)
-			local p_pos_above = area:index(pos.x+x,pos.y+y+1,pos.z+z)
-			local n_above = content_id(data[p_pos_above])
-			--also autoremove old weather
-			if n ~= ctester and n_above == ctester then
-				--print(lightleveltest)
-					--data[p_pos] = percip
+			--deposit snow randomly
+			if math.random() > deposit_chance then
+				--the actual node being indexed
+				local p_pos = area:index(pos.x+x,pos.y+y,pos.z+z)
+				local n = content_id(data[p_pos])
+				--the node above it (testing for place for snow and water)
+				local p_pos_above = area:index(pos.x+x,pos.y+y+1,pos.z+z)
+				local n_above = content_id(data[p_pos_above])
+				--also autoremove old weather
+				if n ~= ctester and n_above == ctester then
+					--print(lightleveltest)
+						--data[p_pos] = percip
 
-					if n ~= "air" and n ~= "snow:snowfall" and minetest.get_item_group(n, "liquid") == 0 and n ~= "default:snow" and minetest.registered_nodes[n]["buildable_to"] == false then
-						data[p_pos_above] = deposit_block
-						if param2er then
-							p2data[p_pos_above] = param2er
+						if n ~= "air" and n ~= "snow:snowfall" and minetest.get_item_group(n, "liquid") == 0 and n ~= "default:snow" and minetest.registered_nodes[n]["buildable_to"] == false then
+							data[p_pos_above] = deposit_block
+							if param2er then
+								p2data[p_pos_above] = param2er
+							end
+						--replace node if buildable to
+					elseif n ~= "air" and n ~= "snow:snowfall" and minetest.get_item_group(n, "liquid") == 0 and n ~= "default:snow" and minetest.registered_nodes[n]["buildable_to"] == true then
+							data[p_pos] = deposit_block
+							if param2er then
+								p2data[p_pos] = param2er
+							end
 						end
-					--replace node if buildable to
-				elseif n ~= "air" and n ~= "snow:snowfall" and minetest.get_item_group(n, "liquid") == 0 and n ~= "default:snow" and minetest.registered_nodes[n]["buildable_to"] == true then
-						data[p_pos] = deposit_block
-						if param2er then
-							p2data[p_pos] = param2er
-						end
-					end
+				end
 			end
 		end
 	end
@@ -391,7 +395,7 @@ end
 
 
 
-
+--new snow (allows snow to pile up)
 
 
 
