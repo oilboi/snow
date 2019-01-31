@@ -190,10 +190,13 @@ snow.make_snow_around_player = function(pos)
 		--this sets if snow or rain
 		local percip
 		if is_snowing == true then
-			percip = snowing
+			percip = snow
 		elseif is_raining == true then
 			percip = rain
 		end
+
+		--this reconverts back to namestring for quick snow removal
+		local ctester = minetest.get_name_from_content_id(percip)
 
 		for x=-range, range do
 		for y=-range, range do
@@ -203,7 +206,8 @@ snow.make_snow_around_player = function(pos)
 				local n = content_id(data[p_pos])
 				local l = lightdata[p_pos]
 				--sets the data
-				if n == "air" and l >= 15 then
+				--also autoremove old weather
+				if (n == "air" or (ctester == "snow:snowfall" and n == "snow:rainfall") or (ctester == "snow:rainfall" and n == "snow:snowfall")) and l >= 15 then
 					local lightleveltest = minetest.get_node_light({x=pos.x+x,y=pos.y+y,z=pos.z+z}, 0.5)
 					--print(lightleveltest)
 					if lightleveltest and lightleveltest >= 15 then
