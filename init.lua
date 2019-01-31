@@ -5,8 +5,10 @@ snow.playertable = {} --the player table
 
 is_snowing = false
 is_raining = false
-local changeupdate = 1  --checks if player position changed every x seconds
-local snowrange = 20
+local changeupdate = 0.25  --checks if player position changed every x seconds
+local snowrange = 20 --the visual of the snow and deposit spawn radius
+
+
 
 -----------------------------------------------------------------------------------------
 --texture tile style (strange)
@@ -26,7 +28,6 @@ minetest.register_node("snow:snowfall", {
 				aspect_h = 64,
 				length = 3,
 			},
-			align_style="user"
 		},
 },
 	inventory_image = "default_papyrus.png",
@@ -44,26 +45,7 @@ minetest.register_node("snow:snowfall", {
 	},
 	groups = {snow=1},
 })
---move this to voxelmanip
---make snow form
-minetest.register_abm{
-  label = "snowfall",
-	nodenames = {"snow:snowfall"},
-	interval = 1,
-	chance = 300, --300 seems to be good
-	action = function(pos)
-			pos.y = pos.y - 1
-			local node = minetest.get_node(pos).name
-			--snow on top of node
-			if node ~= "air" and node ~= "snow:snowfall" and minetest.get_item_group(node, "liquid") == 0 and node ~= "default:snow" and minetest.registered_nodes[node]["buildable_to"] == false then
-				pos.y = pos.y + 1
-				minetest.set_node(pos,{name="default:snow"})
-			--replace node if buildable to
-		elseif node ~= "air" and node ~= "snow:snowfall" and minetest.get_item_group(node, "liquid") == 0 and node ~= "default:snow" and minetest.registered_nodes[node]["buildable_to"] == true then
-				minetest.set_node(pos,{name="default:snow"})
-			end
-	end,
-}
+
 -----------------------------------------------------------------------------------------------
 minetest.register_node("snow:rainfall", {
 	description = "H@CK3R",
@@ -98,25 +80,6 @@ minetest.register_node("snow:rainfall", {
 	},
 	groups = {snow=1},
 })
---make snow form
-minetest.register_abm{
-        label = "rainfall",
-	nodenames = {"snow:rainfall"},
-	interval = 1,
-	chance = 50,
-	action = function(pos)
-		pos.y = pos.y - 1
-		local node = minetest.get_node(pos).name
-		--water on top of node
-		if node ~= "air" and node ~= "snow:rainfall" and minetest.get_item_group(node, "liquid") == 0 and node ~= "default:snow" and minetest.registered_nodes[node]["buildable_to"] == false then
-				pos.y = pos.y + 1
-				minetest.set_node(pos,{name="default:water_flowing",param2=3})
-			--replace node if buildable to
-		elseif node ~= "air" and node ~= "snow:rainfall" and minetest.get_item_group(node, "liquid") == 0 and minetest.registered_nodes[node]["buildable_to"] == true then
-				minetest.set_node(pos,{name="default:water_flowing",param2=3})
-			end
-	end,
-}
 
 --------------------------------------------------------------------
 
@@ -149,6 +112,8 @@ minetest.register_globalstep(function(dtime)
 						end
 						--then make new weather
 						snow.make_snow_around_player(exactplayerpos)
+						--make weather form in world (snow on ground, puddles)
+						snow.make_snow_fall(exactplayerpos)
 
 						--this acts as old position
 						snow.playertable[player:get_player_name()] = exactplayerpos
@@ -174,7 +139,7 @@ end)
 snow.make_snow_around_player = function(pos)
 		local range = snowrange
 		local air = minetest.get_content_id("air")
-		local snow = minetest.get_content_id("snow:snowfall")
+		local snowy = minetest.get_content_id("snow:snowfall")
 		local rain = minetest.get_content_id("snow:rainfall")
 		local water = minetest.get_content_id("default:water_source")
 
@@ -190,7 +155,7 @@ snow.make_snow_around_player = function(pos)
 		--this sets if snow or rain
 		local percip
 		if is_snowing == true then
-			percip = snow
+			percip = snowy
 		elseif is_raining == true then
 			percip = rain
 		end
@@ -227,11 +192,95 @@ snow.make_snow_around_player = function(pos)
 		vm:write_to_map()
 end
 
+--this function actually puts snow and rain on the ground
+snow.make_snow_fall = function(pos)
+	local range = snowrange
+
+	local air = minetest.get_content_id("air")
+	local snowy = minetest.get_content_id("snow:snowfall")
+	local rain = minetest.get_content_id("snow:rainfall")
+	local water = minetest.get_content_id("default:water_source")
+	local snow_node = minetest.get_content_id("default:snow")
+	local water_node = minetest.get_content_id("default:water_flowing")
+
+	local min = {x=pos.x-range,y=pos.y-range,z=pos.z-range}
+	local max = {x=pos.x+range,y=pos.y+range,z=pos.z+range}
+	local vm = minetest.get_voxel_manip()
+	local emin, emax = vm:read_from_map(min,max)
+	local area = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
+	local data = vm:get_data()
+	local content_id = minetest.get_name_from_content_id
+
+	--this sets if snow or rain
+	local percip
+	local deposit_block
+
+	local param2er
+	if is_snowing == true then
+		percip = snowy
+		deposit_block = snow_node
+	elseif is_raining == true then
+		percip = rain
+		deposit_block = water_node
+		param2er = 3
+	end
+	--save resources
+	local p2data
+	if param2er then
+		print("doing rain stuff")
+		 p2data = vm:get_param2_data()
+	end
+	----[[      minetest.set_node(pos,{name="default:water_flowing",param2=3}) THE PARAM2 OF WATER                             ]]-------------------------------HEY
+
+
+	--this reconverts back to namestring for quick snow removal
+	local ctester = minetest.get_name_from_content_id(percip)
+
+
+	for x=-range, range do
+	for y=-range, range do
+	for z=-range, range do
+		if vector.distance(pos, vector.add(pos, {x=x, y=y, z=z})) <= range then
+			--the actual node being indexed
+			local p_pos = area:index(pos.x+x,pos.y+y,pos.z+z)
+			local n = content_id(data[p_pos])
+			--the node above it (testing for place for snow and water)
+			local p_pos_above = area:index(pos.x+x,pos.y+y+1,pos.z+z)
+			local n_above = content_id(data[p_pos_above])
+			--also autoremove old weather
+			if n ~= ctester and n_above == ctester then
+				--print(lightleveltest)
+					--data[p_pos] = percip
+
+					if n ~= "air" and n ~= "snow:snowfall" and minetest.get_item_group(n, "liquid") == 0 and n ~= "default:snow" and minetest.registered_nodes[n]["buildable_to"] == false then
+						data[p_pos_above] = deposit_block
+						if param2er then
+							p2data[p_pos_above] = param2er
+						end
+					--replace node if buildable to
+				elseif n ~= "air" and n ~= "snow:snowfall" and minetest.get_item_group(n, "liquid") == 0 and n ~= "default:snow" and minetest.registered_nodes[n]["buildable_to"] == true then
+						data[p_pos] = deposit_block
+						if param2er then
+							p2data[p_pos] = param2er
+						end
+					end
+			end
+		end
+	end
+	end
+	end
+
+	vm:set_data(data)
+	if param2er then
+		vm:set_param2_data(p2data)
+	end
+	vm:write_to_map()
+end
 --this checks and removes old nodes
 snow.clear_old_snow = function(pos)
 		local range = snowrange
 		local air = minetest.get_content_id("air")
-		local snow = minetest.get_content_id("snow:snowfall")
+		local snowy = minetest.get_content_id("snow:snowfall")
 		local rain = minetest.get_content_id("snow:rainfall")
 
 
