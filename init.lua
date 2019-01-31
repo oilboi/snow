@@ -1,6 +1,12 @@
+local mod_storage = minetest.get_mod_storage()
+local snow = {} --the class
+
+snow.playertable = {} --the player table
+
 is_snowing = false
 is_raining = false
 local changeupdate = 1  --checks if player position changed every x seconds
+local snowrange = 20
 
 -----------------------------------------------------------------------------------------
 --texture tile style (strange)
@@ -20,6 +26,7 @@ minetest.register_node("snow:snowfall", {
 				aspect_h = 64,
 				length = 3,
 			},
+			align_style="user"
 		},
 },
 	inventory_image = "default_papyrus.png",
@@ -37,20 +44,7 @@ minetest.register_node("snow:snowfall", {
 	},
 	groups = {snow=1},
 })
---remove snow
-
-minetest.register_abm{
-	label="removesnow",
-	nodenames = {"snow:snowfall"},
-	interval = 1,
-	chance = 50,
-	action=function(pos)
-		if is_snowing == false then
-			minetest.remove_node(pos)
-		end
-	end,
-}
-
+--move this to voxelmanip
 --make snow form
 minetest.register_abm{
   label = "snowfall",
@@ -106,21 +100,6 @@ minetest.register_node("snow:rainfall", {
 })
 --make snow form
 minetest.register_abm{
-
-	label="removerain",
-	nodenames = {"snow:rainfall"},
-	interval = 1,
-	chance = 50,
-	action=function(pos)
-		--print("removing")
-		if is_raining == false then
-			--print("removing")
-			minetest.remove_node(pos)
-		end
-	end,
-}
-
-minetest.register_abm{
         label = "rainfall",
 	nodenames = {"snow:rainfall"},
 	interval = 1,
@@ -140,20 +119,10 @@ minetest.register_abm{
 }
 
 --------------------------------------------------------------------
-local snow = {} --the class
-snow.playertable = {} --the player table
-
---get player node position on joining
-minetest.register_on_joinplayer(function(player)
-	local playerpos = player:getpos()
-	--get center of node
-	snow.playertable[player:get_player_name()] ={x=math.floor(playerpos.x+0.5),y=math.floor(playerpos.y+0.5),z=math.floor(playerpos.z+0.5)}
-	--print(dump(snow.playertable[player:get_player_name()]))
-	snow.make_snow_around_player(snow.playertable[player:get_player_name()])
-end)
 
 --check if player has moved nodes
 local changetimer = 0
+local old_weather = 0
 minetest.register_globalstep(function(dtime)
 	--add to timer to prevent extreme lag
 	changetimer = changetimer + dtime
@@ -165,36 +134,45 @@ minetest.register_globalstep(function(dtime)
 					--only snow if snowing
 						--get required info
 						--snow or rain
+					local oldpos = snow.playertable[player:get_player_name()]
 					if is_snowing == true or is_raining == true then
 						local playerpos = player:getpos()
 						local exactplayerpos = {x=math.floor(playerpos.x+0.5),y=math.floor(playerpos.y+0.5),z=math.floor(playerpos.z+0.5)}
-						local tablepos = snow.playertable[player:get_player_name()]
-						--do some maths and check if new position, if so, update
-						if tablepos.x ~= exactplayerpos.x or tablepos.y ~= exactplayerpos.y or tablepos.z ~= exactplayerpos.z then
-						--	print(player:get_player_name().."'s position has changed! updating!")
-							snow.playertable[player:get_player_name()] = exactplayerpos
-							snow.make_snow_around_player(exactplayerpos,false)
+
+						--if position moved clear old weather
+						if oldpos.x ~= exactplayerpos.x or oldpos.y ~= exactplayerpos.y or oldpos.z ~= exactplayerpos.z then
+								if oldpos.x then --stop crashes
+									snow.clear_old_snow(oldpos)
+									snow.set_ms_pos(exactplayerpos,player)
+								end
+								--print("clearing old weather")
 						end
+						--then make new weather
+						snow.make_snow_around_player(exactplayerpos)
+
+						--this acts as old position
+						snow.playertable[player:get_player_name()] = exactplayerpos
+
+						old_weather = 1 --do this so that it doesn't try to clear weather every loop
 					--clear up snow
-					else
+				elseif old_weather == 1 then
 						local playerpos = player:getpos()
 						local exactplayerpos = {x=math.floor(playerpos.x+0.5),y=math.floor(playerpos.y+0.5),z=math.floor(playerpos.z+0.5)}
-						local tablepos = snow.playertable[player:get_player_name()]
-						--do some maths and check if new position, if so, update
-						if tablepos.x ~= exactplayerpos.x or tablepos.y ~= exactplayerpos.y or tablepos.z ~= exactplayerpos.z then
-						--	print(player:get_player_name().."'s position has changed! updating!")
-							snow.playertable[player:get_player_name()] = exactplayerpos
-							snow.make_snow_around_player(exactplayerpos,true)
-						end
+						snow.clear_old_snow(oldpos)
+						--this acts as old position
+						snow.playertable[player:get_player_name()] = exactplayerpos
+						old_weather = 0
 					end
 			end
 		end
 	end
 end)
 
---this checks and makes snow fall
-snow.make_snow_around_player = function(pos,clearup)
-		local range = 30
+---------------------------------------------------------------------------
+
+--this checks and makes snow fall nodes
+snow.make_snow_around_player = function(pos)
+		local range = snowrange
 		local air = minetest.get_content_id("air")
 		local snow = minetest.get_content_id("snow:snowfall")
 		local rain = minetest.get_content_id("snow:rainfall")
@@ -210,7 +188,8 @@ snow.make_snow_around_player = function(pos,clearup)
 		local lightdata = vm:get_light_data()
 		local content_id = minetest.get_name_from_content_id
 
-		local percip = 0
+		--this sets if snow or rain
+		local percip
 		if is_snowing == true then
 			percip = snowing
 		elseif is_raining == true then
@@ -221,24 +200,15 @@ snow.make_snow_around_player = function(pos,clearup)
 		for y=-range, range do
 		for z=-range, range do
 			if vector.distance(pos, vector.add(pos, {x=x, y=y, z=z})) <= range then
-
 				local p_pos = area:index(pos.x+x,pos.y+y,pos.z+z)
-
-
 				local n = content_id(data[p_pos])
 				local l = lightdata[p_pos]
-
-				--if n.name ~= "air" then
-				if clearup == false then
-					if n == "air" and l >= 15 then
-						data[p_pos] = percip
-					elseif (n == "snow:snowfall" and l < 15) or (n == "snow:rainfall" and l < 15)  then
-						data[p_pos] = air
-					end
-				elseif n == "snow:snowfall" or n == "snow:rainfall"  then
-						data[p_pos] = air
+				--sets the data
+				if n == "air" and l >= 15 then
+					data[p_pos] = percip
+				elseif (n == "snow:snowfall" and l < 15) or (n == "snow:rainfall" and l < 15)  then
+					data[p_pos] = air --this makes the snow adapt to the environment
 				end
-
 			end
 		end
 		end
@@ -246,8 +216,45 @@ snow.make_snow_around_player = function(pos,clearup)
 
 		vm:set_data(data)
 		vm:write_to_map()
-		vm:update_map()
 end
+
+--this checks and removes old nodes
+snow.clear_old_snow = function(pos)
+		local range = snowrange
+		local air = minetest.get_content_id("air")
+		local snow = minetest.get_content_id("snow:snowfall")
+		local rain = minetest.get_content_id("snow:rainfall")
+
+
+		local min = {x=pos.x-range,y=pos.y-range,z=pos.z-range}
+		local max = {x=pos.x+range,y=pos.y+range,z=pos.z+range}
+		local vm = minetest.get_voxel_manip()
+		local emin, emax = vm:read_from_map(min,max)
+		local area = VoxelArea:new{MinEdge=emin, MaxEdge=emax}
+		local data = vm:get_data()
+		local lightdata = vm:get_light_data()
+		local content_id = minetest.get_name_from_content_id
+
+		for x=-range, range do
+		for y=-range, range do
+		for z=-range, range do
+			if vector.distance(pos, vector.add(pos, {x=x, y=y, z=z})) <= range then
+				local p_pos = area:index(pos.x+x,pos.y+y,pos.z+z)
+				local n = content_id(data[p_pos])
+				local l = lightdata[p_pos]
+				--sets the data
+				if n == "snow:snowfall" or n == "snow:rainfall" then
+					data[p_pos] = air --this clears old snow
+				end
+			end
+		end
+		end
+		end
+
+		vm:set_data(data)
+		vm:write_to_map()
+end
+
 
 --commands
 minetest.register_chatcommand("rain", {
@@ -277,3 +284,69 @@ minetest.register_chatcommand("clear", {
 		is_snowing = false
 	end,
 })
+
+------------------------------------- additional helpers
+
+--remove snow when player leaves!
+minetest.register_on_leaveplayer(function(player)
+	print("clearing "..player:get_player_name().."'s weather")
+
+	--clear old snow in current and last position(if there)
+	local playerpos = player:getpos()
+	local exactplayerpos = {x=math.floor(playerpos.x+0.5),y=math.floor(playerpos.y+0.5),z=math.floor(playerpos.z+0.5)}
+	snow.clear_old_snow(exactplayerpos)
+
+	if snow.playertable[player:get_player_name()] then
+		snow.clear_old_snow(snow.playertable[player:get_player_name()])
+	end
+	snow.set_ms_pos(exactplayerpos,player)
+end)
+
+--remove snow when player leaves!
+--get player node position on joining
+minetest.register_on_joinplayer(function(player)
+	print("clearing "..player:get_player_name().."'s weather")
+
+	--clear old snow in current pos
+	local playerpos = player:getpos()
+	local exactplayerpos = {x=math.floor(playerpos.x+0.5),y=math.floor(playerpos.y+0.5),z=math.floor(playerpos.z+0.5)}
+	snow.clear_old_snow(exactplayerpos)
+
+
+	--remove old snow in last position
+
+	if snow.get_ms_pos(player) then
+		snow.clear_old_snow(snow.get_ms_pos(player))
+	end
+
+	snow.set_ms_pos(exactplayerpos,player)
+	snow.playertable[player:get_player_name()] = exactplayerpos
+end)
+
+
+--helpers for position in mod storage
+snow.set_ms_pos = function(pos,player)
+	mod_storage:set_string(player:get_player_name().."_pos", minetest.pos_to_string(pos, 0))
+end
+
+snow.get_ms_pos = function(player)
+	return(minetest.string_to_pos(mod_storage:get_string(player:get_player_name().."_pos")))
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--
