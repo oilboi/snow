@@ -1,0 +1,9 @@
+local snow = {} --the class
+snow.playertable = {} --the player table
+
+
+
+minetest.register_on_joinplayer(function(player)
+
+
+end)
